@@ -1,15 +1,239 @@
-# CSE 151B Competition — Starter Code
+# 151B Competition Submission
 
-Open **`starter_code_cse151b_comp.ipynb`** to get started.
+## Team
 
-The notebook covers environment setup, inference with Qwen3-4B-Thinking (INT8), and scoring against the public dataset.
+Team name: Team SP
 
-## Contents
+## Model
 
-| File | Description |
-|---|---|
-| `starter_code_cse151b_comp.ipynb` | Main entry point |
-| `judger.py` | Response scoring logic |
-| `utils.py` | Utilities used by `judger.py` |
-| `data/public.jsonl` | Public dataset with ground-truth answers |
-| `results/` | Output JSONL files written at runtime |
+Base model:
+
+```text
+Qwen/Qwen3-4B-Thinking-2507
+```
+
+Fine-tuned LoRA adapter:
+
+```text
+sisaran/lora-math-qwen3
+```
+
+The inference script loads the base model from HuggingFace and loads the fine-tuned LoRA adapter from HuggingFace Hub inside `run_inference()`.
+
+## Hardware Used
+
+GPU used: RTX 4090
+
+Approximate total generation/inference time for the full private set of 943 questions: 30 hours
+
+```
+
+## Setup
+
+Create and activate a clean Python environment.
+
+```bash
+conda create -n comp151b python=3.11 -y
+conda activate comp151b
+```
+
+Install dependencies.
+
+```bash
+pip install -r requirements.txt
+```
+
+If running in an environment with conflicting preinstalled packages, use `PYTHONNOUSERSITE=1`:
+
+```bash
+PYTHONNOUSERSITE=1 python run_inference.py
+```
+
+The final run was tested in a clean Python 3.11 conda environment. On our machine, we used:
+
+```bash
+eval "$(conda shell.bash hook)"
+conda activate /tmp/comp151b
+cd ~/151B_Competition
+PYTHONNOUSERSITE=1 python run_inference.py
+```
+
+The `/tmp/comp151b` path is not required; any clean Python 3.11 environment with the packages in `requirements.txt` should work.
+
+## Model Weights
+
+No local model-weight folder is required.
+
+The script downloads the base model from HuggingFace:
+
+```text
+Qwen/Qwen3-4B-Thinking-2507
+```
+
+The script downloads the fine-tuned LoRA adapter from HuggingFace Hub:
+
+```text
+sisaran/lora-math-qwen3
+```
+
+Inside `run_inference.py`, the model is loaded by:
+
+1. Loading the tokenizer from `Qwen/Qwen3-4B-Thinking-2507`.
+2. Loading the base model `Qwen/Qwen3-4B-Thinking-2507`.
+3. Loading the LoRA adapter from `sisaran/lora-math-qwen3`.
+4. Merging the LoRA adapter into the base model before inference.
+
+## Input Data
+
+Place the private dataset at:
+
+```text
+data/private.jsonl
+```
+
+The file should contain one JSON object per line. Each row should include an `id`, a `question`, and optionally `options` for multiple-choice questions.
+
+## How to Run Inference
+
+From the repository root:
+
+```bash
+python run_inference.py
+```
+
+If the environment has conflicting user-site packages:
+
+```bash
+PYTHONNOUSERSITE=1 python run_inference.py
+```
+
+You can also call the pipeline from Python:
+
+```python
+from run_inference import run_inference
+
+run_inference(
+    data_path="data/private.jsonl",
+    output_path="results/submission_SFT.csv",
+)
+```
+
+## Output
+
+The script writes the final submission file to:
+
+```text
+results/submission_SFT.csv
+```
+
+The CSV has the following columns:
+
+```text
+id,response
+```
+
+## Single Entry Point
+
+The required single entry point is:
+
+```python
+run_inference()
+```
+
+Calling `run_inference()` performs the full pipeline end-to-end:
+
+1. Loads the private dataset from `data/private.jsonl`.
+2. Loads the tokenizer from `Qwen/Qwen3-4B-Thinking-2507`.
+3. Loads the base model `Qwen/Qwen3-4B-Thinking-2507`.
+4. Loads the fine-tuned LoRA adapter from `sisaran/lora-math-qwen3`.
+5. Merges the LoRA adapter into the base model.
+6. Runs inference on all private-set questions.
+7. Writes the final CSV to `results/submission_SFT.csv`.
+
+No manual steps are required after calling `run_inference()`.
+
+## Prompting Strategy
+
+The pipeline uses separate prompts for:
+
+1. Multiple-choice questions.
+2. Single-answer free-form questions.
+3. Multi-answer free-form questions containing multiple `[ANS]` placeholders.
+
+Multiple-choice questions are prompted to return the selected option letter inside `\boxed{}`.
+
+Free-form questions are prompted to solve concisely and place the final answer inside `\boxed{}`.
+
+Multi-answer questions are prompted to return all answers in one `\boxed{}` separated by commas, in the same order as the `[ANS]` placeholders.
+
+## Generation Settings
+
+The final generation settings used are:
+
+```text
+max_length = 16384
+temperature = 0.6
+top_p = 0.95
+top_k = 20
+repetition_penalty = 1.05
+do_sample = True
+```
+
+The script uses a two-pass generation strategy:
+
+1. Generate reasoning/thinking tokens.
+2. Append a closing `</think>` marker.
+3. Generate the final answer greedily.
+
+Token budgets:
+
+```text
+MCQ thinking budget: 2000
+MCQ answer budget: 1000
+
+Single-answer free-form thinking budget: 3000
+Single-answer free-form answer budget: 2500
+
+Multi-answer free-form thinking budget: 3000
+Multi-answer free-form answer budget: 3000
+```
+
+## Post-processing
+
+No external or manual post-processing is required.
+
+The submitted CSV is produced directly by `run_inference.py`. The script writes the raw model response generated by the inference pipeline into the `response` column.
+
+## Reproducibility Notes
+
+The script sets:
+
+```python
+torch.manual_seed(42)
+```
+
+Some output variation may still occur because sampling is used during the thinking-generation phase. However, the same model, adapter, prompts, generation settings, and full inference pipeline are contained in `run_inference.py`.
+
+The LoRA adapter is loaded from HuggingFace Hub inside the `run_inference()` pipeline, so no local adapter folder is needed.
+
+## Requirements
+
+Install dependencies using:
+
+```bash
+pip install -r requirements.txt
+```
+
+The expected `requirements.txt` is:
+
+```text
+torch==2.3.1
+numpy<2.0
+transformers==4.51.3
+tokenizers>=0.21.0,<0.22.0
+peft==0.15.2
+accelerate>=0.34.0
+bitsandbytes
+tqdm
+huggingface_hub>=0.30.0,<1.0
+```
