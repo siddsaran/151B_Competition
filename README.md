@@ -22,7 +22,7 @@ The inference script loads the base model from HuggingFace and loads the fine-tu
 
 ## Hardware Used
 
-GPU used: RTX 4090
+GPU used: NVIDIA RTX PRO 6000 Blackwell
 
 Approximate total generation/inference time for the full private set of 943 questions: 30 hours
 
